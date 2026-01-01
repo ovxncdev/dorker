@@ -1,0 +1,396 @@
+# Domain Blacklist
+# Domains listed here will be excluded from all results
+# One domain per line, comments start with #
+
+# ============================================
+# GOOGLE DOMAINS
+# ============================================
+google.com
+www.google.com
+accounts.google.com
+support.google.com
+policies.google.com
+maps.google.com
+translate.google.com
+scholar.google.com
+books.google.com
+news.google.com
+images.google.com
+video.google.com
+play.google.com
+drive.google.com
+docs.google.com
+mail.google.com
+calendar.google.com
+photos.google.com
+meet.google.com
+chat.google.com
+sites.google.com
+groups.google.com
+ads.google.com
+analytics.google.com
+search.google.com
+store.google.com
+cloud.google.com
+firebase.google.com
+developers.google.com
+console.cloud.google.com
+googleapis.com
+googleusercontent.com
+gstatic.com
+googlesyndication.com
+googleadservices.com
+google-analytics.com
+googletagmanager.com
+googlevideo.com
+googlecode.com
+googleblog.com
+googlemail.com
+
+# ============================================
+# YOUTUBE
+# ============================================
+youtube.com
+www.youtube.com
+youtu.be
+m.youtube.com
+music.youtube.com
+tv.youtube.com
+gaming.youtube.com
+studio.youtube.com
+youtubei.googleapis.com
+
+# ============================================
+# SOCIAL MEDIA
+# ============================================
+facebook.com
+www.facebook.com
+m.facebook.com
+fb.com
+fb.me
+messenger.com
+instagram.com
+www.instagram.com
+twitter.com
+www.twitter.com
+x.com
+www.x.com
+t.co
+linkedin.com
+www.linkedin.com
+tiktok.com
+www.tiktok.com
+pinterest.com
+www.pinterest.com
+reddit.com
+www.reddit.com
+old.reddit.com
+tumblr.com
+www.tumblr.com
+snapchat.com
+www.snapchat.com
+whatsapp.com
+www.whatsapp.com
+telegram.org
+t.me
+discord.com
+discord.gg
+twitch.tv
+www.twitch.tv
+vk.com
+weibo.com
+wechat.com
+line.me
+quora.com
+www.quora.com
+
+# ============================================
+# SEARCH ENGINES
+# ============================================
+bing.com
+www.bing.com
+yahoo.com
+www.yahoo.com
+search.yahoo.com
+yandex.com
+www.yandex.com
+yandex.ru
+baidu.com
+www.baidu.com
+duckduckgo.com
+www.duckduckgo.com
+ask.com
+www.ask.com
+aol.com
+search.aol.com
+ecosia.org
+www.ecosia.org
+startpage.com
+www.startpage.com
+qwant.com
+www.qwant.com
+
+# ============================================
+# MAJOR TECH COMPANIES
+# ============================================
+apple.com
+www.apple.com
+icloud.com
+microsoft.com
+www.microsoft.com
+office.com
+live.com
+outlook.com
+bing.com
+azure.com
+amazon.com
+www.amazon.com
+aws.amazon.com
+alexa.com
+imdb.com
+netflix.com
+www.netflix.com
+spotify.com
+www.spotify.com
+adobe.com
+www.adobe.com
+creativecloud.com
+oracle.com
+www.oracle.com
+ibm.com
+www.ibm.com
+salesforce.com
+www.salesforce.com
+dropbox.com
+www.dropbox.com
+zoom.us
+www.zoom.us
+slack.com
+www.slack.com
+
+# ============================================
+# DEVELOPMENT / CODE
+# ============================================
+github.com
+www.github.com
+raw.githubusercontent.com
+gist.github.com
+gitlab.com
+www.gitlab.com
+bitbucket.org
+www.bitbucket.org
+stackoverflow.com
+www.stackoverflow.com
+stackexchange.com
+superuser.com
+serverfault.com
+askubuntu.com
+npmjs.com
+www.npmjs.com
+pypi.org
+www.pypi.org
+packagist.org
+rubygems.org
+maven.org
+nuget.org
+crates.io
+hub.docker.com
+codepen.io
+jsfiddle.net
+replit.com
+codesandbox.io
+glitch.com
+
+# ============================================
+# MEDIA / NEWS
+# ============================================
+medium.com
+www.medium.com
+wordpress.com
+www.wordpress.com
+wordpress.org
+blogger.com
+www.blogger.com
+blogspot.com
+wix.com
+www.wix.com
+squarespace.com
+www.squarespace.com
+weebly.com
+www.weebly.com
+substack.com
+www.substack.com
+ghost.org
+nytimes.com
+www.nytimes.com
+washingtonpost.com
+www.washingtonpost.com
+theguardian.com
+www.theguardian.com
+bbc.com
+www.bbc.com
+bbc.co.uk
+www.bbc.co.uk
+cnn.com
+www.cnn.com
+foxnews.com
+www.foxnews.com
+reuters.com
+www.reuters.com
+apnews.com
+bloomberg.com
+www.bloomberg.com
+forbes.com
+www.forbes.com
+businessinsider.com
+www.businessinsider.com
+techcrunch.com
+www.techcrunch.com
+wired.com
+www.wired.com
+theverge.com
+www.theverge.com
+engadget.com
+www.engadget.com
+mashable.com
+www.mashable.com
+huffpost.com
+www.huffpost.com
+buzzfeed.com
+www.buzzfeed.com
+
+# ============================================
+# E-COMMERCE
+# ============================================
+ebay.com
+www.ebay.com
+etsy.com
+www.etsy.com
+shopify.com
+www.shopify.com
+aliexpress.com
+www.aliexpress.com
+alibaba.com
+www.alibaba.com
+wish.com
+www.wish.com
+walmart.com
+www.walmart.com
+target.com
+www.target.com
+bestbuy.com
+www.bestbuy.com
+homedepot.com
+www.homedepot.com
+wayfair.com
+www.wayfair.com
+overstock.com
+www.overstock.com
+newegg.com
+www.newegg.com
+
+# ============================================
+# EDUCATION / REFERENCE
+# ============================================
+wikipedia.org
+www.wikipedia.org
+en.wikipedia.org
+wikimedia.org
+wiktionary.org
+wikihow.com
+www.wikihow.com
+britannica.com
+www.britannica.com
+dictionary.com
+www.dictionary.com
+thesaurus.com
+merriam-webster.com
+www.merriam-webster.com
+cambridge.org
+oxford.com
+edu
+.edu
+
+# ============================================
+# INFRASTRUCTURE / CDN
+# ============================================
+cloudflare.com
+www.cloudflare.com
+cloudflare-dns.com
+akamai.com
+akamaihd.net
+akamaized.net
+fastly.net
+cloudfront.net
+amazonaws.com
+s3.amazonaws.com
+azureedge.net
+azurewebsites.net
+herokuapp.com
+netlify.app
+netlify.com
+vercel.app
+vercel.com
+pages.dev
+workers.dev
+firebaseapp.com
+firebaseio.com
+appspot.com
+digitaloceanspaces.com
+linode.com
+vultr.com
+
+# ============================================
+# REGISTRARS / HOSTING
+# ============================================
+godaddy.com
+www.godaddy.com
+namecheap.com
+www.namecheap.com
+hostgator.com
+bluehost.com
+siteground.com
+dreamhost.com
+ionos.com
+hostinger.com
+ovh.com
+register.com
+name.com
+hover.com
+gandi.net
+dynadot.com
+porkbun.com
+epik.com
+
+# ============================================
+# SECURITY / TOOLS
+# ============================================
+virustotal.com
+www.virustotal.com
+urlscan.io
+shodan.io
+www.shodan.io
+censys.io
+www.censys.io
+securitytrails.com
+dnsdumpster.com
+whois.com
+who.is
+archive.org
+web.archive.org
+waybackmachine.org
+
+# ============================================
+# W3C / STANDARDS
+# ============================================
+w3.org
+www.w3.org
+schema.org
+www.schema.org
+json-ld.org
+iana.org
+www.iana.org
+ietf.org
+www.ietf.org
+unicode.org
+ecma-international.org
