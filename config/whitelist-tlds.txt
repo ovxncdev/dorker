@@ -1,0 +1,252 @@
+# TLD Whitelist
+# Only domains with these TLDs will be kept (if whitelist is enabled)
+# Leave empty to allow all TLDs (use blacklist instead)
+# One TLD per line, without the dot, comments start with #
+
+# ============================================
+# GENERIC TLDs (Most Common)
+# ============================================
+com
+org
+net
+info
+biz
+
+# ============================================
+# COUNTRY CODE TLDs (Popular)
+# ============================================
+# United States
+us
+
+# United Kingdom
+uk
+co.uk
+org.uk
+me.uk
+
+# Germany
+de
+
+# France
+fr
+
+# Spain
+es
+
+# Italy
+it
+
+# Netherlands
+nl
+
+# Belgium
+be
+
+# Austria
+at
+
+# Switzerland
+ch
+
+# Poland
+pl
+
+# Russia
+ru
+
+# Japan
+jp
+co.jp
+
+# South Korea
+kr
+co.kr
+
+# China
+cn
+com.cn
+
+# Taiwan
+tw
+com.tw
+
+# Hong Kong
+hk
+com.hk
+
+# Singapore
+sg
+com.sg
+
+# India
+in
+co.in
+
+# Australia
+au
+com.au
+
+# New Zealand
+nz
+co.nz
+
+# Canada
+ca
+
+# Mexico
+mx
+com.mx
+
+# Brazil
+br
+com.br
+
+# Argentina
+ar
+com.ar
+
+# South Africa
+za
+co.za
+
+# Sweden
+se
+
+# Norway
+no
+
+# Denmark
+dk
+
+# Finland
+fi
+
+# Portugal
+pt
+
+# Greece
+gr
+
+# Turkey
+tr
+com.tr
+
+# Israel
+il
+co.il
+
+# UAE
+ae
+
+# Ireland
+ie
+
+# Czech Republic
+cz
+
+# Romania
+ro
+
+# Hungary
+hu
+
+# Ukraine
+ua
+com.ua
+
+# ============================================
+# NEW gTLDs (Legitimate)
+# ============================================
+io
+co
+me
+tv
+fm
+app
+dev
+tech
+online
+site
+website
+blog
+shop
+store
+cloud
+digital
+media
+news
+agency
+studio
+design
+solutions
+services
+software
+systems
+network
+group
+global
+international
+world
+zone
+life
+live
+today
+now
+one
+plus
+pro
+expert
+consulting
+ventures
+partners
+capital
+holdings
+investments
+finance
+legal
+law
+health
+medical
+education
+academy
+training
+institute
+university
+college
+school
+research
+science
+engineering
+security
+cyber
+data
+analytics
+ai
+
+# ============================================
+# SPECIFIC USE TLDs
+# ============================================
+gov
+edu
+mil
+int
+coop
+museum
+aero
+jobs
+mobi
+travel
+cat
+asia
+tel
+
+# ============================================
+# NOTES
+# ============================================
+# To use whitelist mode:
+# 1. Set filter.tldWhitelist in settings.json to these TLDs
+# 2. Or leave empty to use blacklist mode instead
+#
+# Blacklisted TLDs (in settings.json by default):
+# xyz, top, loan, work, click, gq, ml, ga, cf, tk
+# These are often used for spam/malicious sites
