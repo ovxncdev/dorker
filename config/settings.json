@@ -1,0 +1,176 @@
+{
+  "$schema": "./settings.schema.json",
+  "version": "1.0.0",
+
+  "engine": {
+    "type": "google",
+    "workers": 100,
+    "pagesPerDork": 5,
+    "resultsPerPage": 10,
+    "timeout": 30000,
+    "retryAttempts": 3,
+    "retryDelay": 5000
+  },
+
+  "proxy": {
+    "rotateAfter": 1,
+    "rotationStrategy": "round_robin",
+    "healthCheckOnStart": true,
+    "healthCheckInterval": 300000,
+    "quarantineDuration": 300000,
+    "maxFailCount": 5,
+    "protocols": ["http", "https", "socks4", "socks5"]
+  },
+
+  "stealth": {
+    "profile": "normal",
+    "delayMin": 1000,
+    "delayMax": 3000,
+    "burstSize": 10,
+    "burstPause": 5000,
+    "sessionMaxRequests": 100,
+    "sessionCooldown": 60000,
+    "jitterPercent": 0.3,
+    "rotateUserAgent": true,
+    "rotateGoogleDomain": true
+  },
+
+  "filter": {
+    "cleanDomains": true,
+    "removeRedirects": true,
+    "removeDuplicates": true,
+    "urlParamsOnly": false,
+    "antiPublic": true,
+    "localAntiPublic": true,
+    "tldWhitelist": [],
+    "tldBlacklist": ["xyz", "top", "loan", "work", "click", "gq", "ml", "ga", "cf", "tk"],
+    "domainBlacklist": [],
+    "keywordInclude": [],
+    "keywordExclude": [],
+    "minUrlLength": 10,
+    "maxUrlLength": 2000
+  },
+
+  "output": {
+    "directory": "./output",
+    "formats": ["txt", "json"],
+    "separateByDork": false,
+    "includeRaw": true,
+    "includeFiltered": true,
+    "includeDomains": true,
+    "includeStats": true,
+    "realTimeWrite": true,
+    "timestampFolders": true
+  },
+
+  "antiPublic": {
+    "enabled": true,
+    "domains": [
+      "facebook.com",
+      "twitter.com",
+      "instagram.com",
+      "linkedin.com",
+      "youtube.com",
+      "tiktok.com",
+      "pinterest.com",
+      "reddit.com",
+      "tumblr.com",
+      "flickr.com",
+      "wikipedia.org",
+      "amazon.com",
+      "ebay.com",
+      "apple.com",
+      "microsoft.com",
+      "github.com",
+      "stackoverflow.com",
+      "quora.com",
+      "medium.com",
+      "wordpress.com",
+      "blogger.com",
+      "wix.com",
+      "squarespace.com",
+      "weebly.com",
+      "shopify.com",
+      "godaddy.com",
+      "cloudflare.com",
+      "googleapis.com",
+      "googleusercontent.com",
+      "gstatic.com",
+      "bing.com",
+      "yahoo.com",
+      "yandex.com",
+      "baidu.com",
+      "duckduckgo.com",
+      "ask.com"
+    ]
+  },
+
+  "browser": {
+    "enabled": true,
+    "fallbackOnly": true,
+    "headless": true,
+    "stealth": true,
+    "timeout": 60000,
+    "maxContexts": 5
+  },
+
+  "notifications": {
+    "discord": {
+      "enabled": false,
+      "webhookUrl": "",
+      "notifyOnComplete": true,
+      "notifyOnError": true,
+      "notifyOnMilestone": true,
+      "milestoneInterval": 10000
+    },
+    "telegram": {
+      "enabled": false,
+      "botToken": "",
+      "chatId": "",
+      "notifyOnComplete": true,
+      "notifyOnError": true
+    }
+  },
+
+  "logging": {
+    "level": "info",
+    "console": true,
+    "file": true,
+    "directory": "./output/logs",
+    "maxFiles": 10,
+    "maxSize": "10m",
+    "format": "json"
+  },
+
+  "state": {
+    "saveProgress": true,
+    "saveInterval": 30000,
+    "stateFile": "./state/progress.json",
+    "historyDb": "./state/domains.db"
+  },
+
+  "cli": {
+    "showBanner": true,
+    "showProgress": true,
+    "showStats": true,
+    "showActivity": true,
+    "refreshInterval": 500,
+    "colors": true
+  },
+
+  "limits": {
+    "maxDorks": 0,
+    "maxUrls": 0,
+    "maxDomains": 0,
+    "maxTime": 0,
+    "maxMemory": 0
+  },
+
+  "advanced": {
+    "bloomFilterSize": 10000000,
+    "bloomFilterErrorRate": 0.01,
+    "streamBufferSize": 1000,
+    "maxConcurrentWrites": 10,
+    "gcInterval": 60000
+  }
+}
