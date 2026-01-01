@@ -1,0 +1,428 @@
+# Anti-Public Domain List
+# These are common/public sites that are typically filtered out
+# to focus on unique, lesser-known targets
+# One domain per line, comments start with #
+
+# ============================================
+# SOCIAL MEDIA PLATFORMS
+# ============================================
+facebook.com
+twitter.com
+x.com
+instagram.com
+linkedin.com
+tiktok.com
+youtube.com
+pinterest.com
+reddit.com
+tumblr.com
+snapchat.com
+whatsapp.com
+telegram.org
+discord.com
+twitch.tv
+vk.com
+weibo.com
+wechat.com
+line.me
+quora.com
+flickr.com
+imgur.com
+9gag.com
+dailymotion.com
+vimeo.com
+soundcloud.com
+mixcloud.com
+bandcamp.com
+myspace.com
+meetup.com
+nextdoor.com
+yelp.com
+tripadvisor.com
+foursquare.com
+
+# ============================================
+# SEARCH ENGINES
+# ============================================
+google.com
+bing.com
+yahoo.com
+yandex.com
+yandex.ru
+baidu.com
+duckduckgo.com
+ask.com
+aol.com
+ecosia.org
+startpage.com
+qwant.com
+brave.com
+search.brave.com
+gibiru.com
+swisscows.com
+mojeek.com
+searx.me
+
+# ============================================
+# E-COMMERCE GIANTS
+# ============================================
+amazon.com
+amazon.co.uk
+amazon.de
+amazon.fr
+amazon.es
+amazon.it
+amazon.co.jp
+amazon.ca
+amazon.com.au
+amazon.in
+amazon.com.br
+amazon.com.mx
+ebay.com
+ebay.co.uk
+ebay.de
+ebay.fr
+etsy.com
+aliexpress.com
+alibaba.com
+wish.com
+walmart.com
+target.com
+bestbuy.com
+homedepot.com
+lowes.com
+costco.com
+wayfair.com
+overstock.com
+newegg.com
+zappos.com
+asos.com
+zara.com
+hm.com
+uniqlo.com
+ikea.com
+craigslist.org
+
+# ============================================
+# TECH GIANTS
+# ============================================
+apple.com
+microsoft.com
+ibm.com
+oracle.com
+salesforce.com
+adobe.com
+cisco.com
+intel.com
+amd.com
+nvidia.com
+samsung.com
+sony.com
+lg.com
+dell.com
+hp.com
+lenovo.com
+asus.com
+acer.com
+toshiba.com
+panasonic.com
+huawei.com
+xiaomi.com
+oppo.com
+vivo.com
+oneplus.com
+
+# ============================================
+# STREAMING / ENTERTAINMENT
+# ============================================
+netflix.com
+hulu.com
+disneyplus.com
+hbomax.com
+max.com
+primevideo.com
+peacocktv.com
+paramountplus.com
+appletv.com
+spotify.com
+pandora.com
+deezer.com
+tidal.com
+audible.com
+kindle.com
+twitch.tv
+crunchyroll.com
+funimation.com
+
+# ============================================
+# DEVELOPMENT / CODE HOSTING
+# ============================================
+github.com
+gitlab.com
+bitbucket.org
+sourceforge.net
+stackoverflow.com
+stackexchange.com
+superuser.com
+serverfault.com
+askubuntu.com
+codepen.io
+jsfiddle.net
+codesandbox.io
+replit.com
+glitch.com
+pastebin.com
+hastebin.com
+gist.github.com
+npmjs.com
+pypi.org
+packagist.org
+rubygems.org
+nuget.org
+crates.io
+maven.org
+gradle.org
+dockerhub.com
+hub.docker.com
+
+# ============================================
+# BLOGGING / CMS PLATFORMS
+# ============================================
+wordpress.com
+wordpress.org
+blogger.com
+blogspot.com
+medium.com
+tumblr.com
+wix.com
+squarespace.com
+weebly.com
+ghost.org
+substack.com
+typepad.com
+livejournal.com
+xanga.com
+movabletype.com
+drupal.org
+joomla.org
+
+# ============================================
+# REFERENCE / EDUCATION
+# ============================================
+wikipedia.org
+wikimedia.org
+wiktionary.org
+wikihow.com
+britannica.com
+dictionary.com
+thesaurus.com
+merriam-webster.com
+cambridge.org
+oxford.com
+khanacademy.org
+coursera.org
+udemy.com
+edx.org
+udacity.com
+lynda.com
+skillshare.com
+masterclass.com
+duolingo.com
+memrise.com
+quizlet.com
+chegg.com
+studymode.com
+
+# ============================================
+# NEWS / MEDIA OUTLETS
+# ============================================
+nytimes.com
+washingtonpost.com
+theguardian.com
+bbc.com
+bbc.co.uk
+cnn.com
+foxnews.com
+msnbc.com
+nbcnews.com
+abcnews.go.com
+cbsnews.com
+reuters.com
+apnews.com
+bloomberg.com
+forbes.com
+businessinsider.com
+wsj.com
+ft.com
+economist.com
+time.com
+newsweek.com
+usatoday.com
+latimes.com
+nypost.com
+dailymail.co.uk
+huffpost.com
+buzzfeed.com
+vice.com
+vox.com
+axios.com
+politico.com
+thehill.com
+techcrunch.com
+wired.com
+theverge.com
+engadget.com
+mashable.com
+gizmodo.com
+lifehacker.com
+arstechnica.com
+cnet.com
+zdnet.com
+tomshardware.com
+pcmag.com
+pcworld.com
+
+# ============================================
+# CLOUD / HOSTING PROVIDERS
+# ============================================
+cloudflare.com
+amazonaws.com
+azure.com
+googlecloud.com
+digitalocean.com
+linode.com
+vultr.com
+ovh.com
+heroku.com
+netlify.com
+vercel.com
+github.io
+gitlab.io
+bitbucket.io
+firebaseapp.com
+appspot.com
+azurewebsites.net
+herokuapp.com
+netlify.app
+vercel.app
+pages.dev
+workers.dev
+
+# ============================================
+# DOMAIN REGISTRARS / WEB SERVICES
+# ============================================
+godaddy.com
+namecheap.com
+hostgator.com
+bluehost.com
+siteground.com
+dreamhost.com
+ionos.com
+hostinger.com
+register.com
+name.com
+hover.com
+gandi.net
+dynadot.com
+porkbun.com
+epik.com
+whois.com
+who.is
+
+# ============================================
+# FINANCIAL / PAYMENT
+# ============================================
+paypal.com
+stripe.com
+square.com
+venmo.com
+cashapp.com
+zelle.com
+wise.com
+revolut.com
+chase.com
+bankofamerica.com
+wellsfargo.com
+citibank.com
+capitalone.com
+americanexpress.com
+discover.com
+mastercard.com
+visa.com
+coinbase.com
+binance.com
+kraken.com
+gemini.com
+robinhood.com
+etrade.com
+fidelity.com
+schwab.com
+vanguard.com
+
+# ============================================
+# GOVERNMENT / ORGANIZATIONS
+# ============================================
+gov
+.gov
+.gov.uk
+.gov.au
+.gc.ca
+.gob.mx
+.edu
+.mil
+.int
+un.org
+who.int
+unesco.org
+worldbank.org
+imf.org
+nato.int
+europa.eu
+whitehouse.gov
+usa.gov
+irs.gov
+ssa.gov
+fda.gov
+cdc.gov
+nih.gov
+fbi.gov
+cia.gov
+nsa.gov
+dhs.gov
+
+# ============================================
+# MISCELLANEOUS POPULAR SITES
+# ============================================
+archive.org
+web.archive.org
+goodreads.com
+imdb.com
+rottentomatoes.com
+metacritic.com
+letterboxd.com
+discogs.com
+last.fm
+genius.com
+lyrics.com
+azlyrics.com
+weather.com
+accuweather.com
+wunderground.com
+timeanddate.com
+worldtimeserver.com
+booking.com
+airbnb.com
+expedia.com
+hotels.com
+kayak.com
+skyscanner.com
+priceline.com
+trivago.com
+vrbo.com
+uber.com
+lyft.com
+doordash.com
+grubhub.com
+postmates.com
+instacart.com
+seamless.com
