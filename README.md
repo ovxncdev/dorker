@@ -61,7 +61,7 @@ High-performance Google dork parser with hybrid Go/TypeScript architecture. Buil
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/google-dork-parser.git
+git clone https://github.com/ovxncdev/google-dork-parser.git
 cd google-dork-parser
 
 # Install dependencies
