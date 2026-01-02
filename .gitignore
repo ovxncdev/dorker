@@ -1,0 +1,45 @@
+# Binaries
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go
+worker/tmp/
+*.test
+*.out
+go.work
+
+# Node
+cli/node_modules/
+cli/dist/
+*.log
+npm-debug.log*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+output/
+results/
+logs/
+*.jsonl
+checkpoints/
+
+# Config with secrets
+config/local.yaml
+config/*.local.yaml
+
+# Test files
+test-dorks.txt
+test-proxies.txt
