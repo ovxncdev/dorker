@@ -2,6 +2,7 @@
   "name": "dorker-cli",
   "version": "1.0.0",
   "description": "High-performance Google Dork parser CLI",
+  "type": "module",
   "main": "dist/index.js",
   "bin": {
     "dorker": "./dist/index.js"
