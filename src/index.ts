@@ -118,5 +118,7 @@ export * from './output/state.js';
 export * from './browser/playwright.js';
 export * from './cli/ui.js';
 export * from './cli/commands.js';
+export * from './cli/interactive.js';
+export * from './cli/dashboard.js';
 export * from './utils/logger.js';
 export * from './utils/validator.js';
