@@ -1,170 +1,447 @@
+
 import blessed from 'blessed';
 import contrib from 'blessed-contrib';
-import { DEFAULT_STATS, DEFAULT_PROGRESS, DEFAULT_PROXY_INFO } from './types.js';
-import { formatDuration, formatNumber } from './output.js';
 
-export class TerminalUI {
+export class DorkerUI {
   constructor() {
+    this.screen = null;
+    this.grid = null;
+    this.widgets = {};
     this.state = {
-      isRunning: false,
-      isPaused: false,
-      stats: { ...DEFAULT_STATS },
-      progress: { ...DEFAULT_PROGRESS },
-      proxyInfo: { ...DEFAULT_PROXY_INFO },
-      recentActivity: [],
+      phase: 'init', // init, running, paused, complete
+      dorks: { total: 0, completed: 0, failed: 0 },
+      urls: { raw: 0, filtered: 0, domains: 0 },
+      proxies: { total: 0, alive: 0, dead: 0, quarantined: 0 },
+      timing: { started: null, elapsed: 0, eta: 0 },
+      throughput: [],
+      activity: [],
+      stats: { requestsPerMin: 0, successRate: 0 }
     };
-    this.throughputHistory = [];
-    this.MAX_HISTORY = 60;
+    this.callbacks = {};
+  }
 
-    this.screen = blessed.screen({ smartCSR: true, title: 'Dorker' });
-    this.grid = new contrib.grid({ rows: 12, cols: 12, screen: this.screen });
-
-    this.progressBar = this.grid.set(0, 0, 2, 12, contrib.gauge, {
-      label: ' Progress ',
-      stroke: 'green',
-      fill: 'white',
+  init() {
+    this.screen = blessed.screen({
+      smartCSR: true,
+      title: 'Dorker - Google Dork Parser',
+      fullUnicode: true,
     });
 
-    this.statsLcd = this.grid.set(2, 0, 2, 3, contrib.lcd, {
-      label: ' Req/s ',
-      elements: 5,
-      display: '0',
-      color: 'green',
+    this.grid = new contrib.grid({
+      rows: 12,
+      cols: 12,
+      screen: this.screen
     });
 
-    this.sparkline = this.grid.set(2, 3, 2, 5, contrib.sparkline, {
-      label: ' Throughput ',
-      tags: true,
-    });
-
-    this.proxyDonut = this.grid.set(2, 8, 2, 4, contrib.donut, {
-      label: ' Proxies ',
-      radius: 8,
-      arcWidth: 3,
-    });
-
-    this.statsTable = this.grid.set(4, 0, 3, 4, contrib.table, {
-      label: ' Statistics ',
-      columnWidth: [14, 10],
-    });
-
-    this.logBox = this.grid.set(4, 4, 4, 8, contrib.log, {
-      label: ' Activity ',
-      tags: true,
-    });
-
-    this.controlsBox = this.grid.set(7, 0, 1, 4, blessed.box, {
-      label: ' Controls ',
-      content: '[P] Pause  [Q] Quit',
-    });
-
+    this.createWidgets();
     this.setupKeys();
+    this.render();
+  }
+
+  createWidgets() {
+    // Banner/Logo (row 0-2, col 0-12)
+    this.widgets.banner = this.grid.set(0, 0, 2, 12, blessed.box, {
+      content: this.getBanner(),
+      tags: true,
+      style: {
+        fg: 'cyan',
+        border: { fg: 'cyan' }
+      }
+    });
+
+    // Progress bar (row 2-3, col 0-12)
+    this.widgets.progress = this.grid.set(2, 0, 2, 12, blessed.box, {
+      label: ' PROGRESS ',
+      tags: true,
+      border: { type: 'line' },
+      style: { border: { fg: 'white' } }
+    });
+
+    // Live stats (row 4-6, col 0-6)
+    this.widgets.stats = this.grid.set(4, 0, 3, 6, blessed.box, {
+      label: ' LIVE STATS ',
+      tags: true,
+      border: { type: 'line' },
+      style: { border: { fg: 'green' } }
+    });
+
+    // Throughput sparkline (row 4-6, col 6-12)
+    this.widgets.throughput = this.grid.set(4, 6, 3, 6, contrib.sparkline, {
+      label: ' THROUGHPUT (req/sec) ',
+      tags: true,
+      style: { fg: 'cyan', border: { fg: 'cyan' } }
+    });
+
+    // Proxy status (row 7-8, col 0-4)
+    this.widgets.proxies = this.grid.set(7, 0, 2, 4, contrib.donut, {
+      label: ' PROXIES ',
+      radius: 6,
+      arcWidth: 2,
+      remainColor: 'black',
+      yPadding: 1,
+    });
+
+    // Results summary (row 7-8, col 4-8)
+    this.widgets.results = this.grid.set(7, 4, 2, 4, blessed.box, {
+      label: ' RESULTS ',
+      tags: true,
+      border: { type: 'line' },
+      style: { border: { fg: 'yellow' } }
+    });
+
+    // Controls (row 7-8, col 8-12)
+    this.widgets.controls = this.grid.set(7, 8, 2, 4, blessed.box, {
+      label: ' CONTROLS ',
+      tags: true,
+      border: { type: 'line' },
+      style: { border: { fg: 'magenta' } },
+      content: '\n {bold}[P]{/} Pause  {bold}[R]{/} Resume\n {bold}[+/-]{/} Speed  {bold}[Q]{/} Quit'
+    });
+
+    // Activity log (row 9-12, col 0-12)
+    this.widgets.activity = this.grid.set(9, 0, 3, 12, contrib.log, {
+      label: ' RECENT ACTIVITY ',
+      tags: true,
+      border: { type: 'line' },
+      style: { border: { fg: 'white' } }
+    });
+  }
+
+  getBanner() {
+    return `{center}{cyan-fg}{bold}
+██████╗  ██████╗ ██████╗ ██╗  ██╗███████╗██████╗ 
+██╔══██╗██╔═══██╗██╔══██╗██║ ██╔╝██╔════╝██╔══██╗
+██║  ██║██║   ██║██████╔╝█████╔╝ █████╗  ██████╔╝
+██║  ██║██║   ██║██╔══██╗██╔═██╗ ██╔══╝  ██╔══██╗
+██████╔╝╚██████╔╝██║  ██║██║  ██╗███████╗██║  ██║
+╚═════╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
+                 v1.0.0 - Google Dork Parser{/}{/}{/center}`;
   }
 
   setupKeys() {
     this.screen.key(['escape', 'q', 'C-c'], () => {
-      if (this.onQuit) this.onQuit();
-      else process.exit(0);
+      if (this.callbacks.onQuit) this.callbacks.onQuit();
+      else this.exit();
     });
+
     this.screen.key(['p'], () => {
-      if (this.state.isPaused) { if (this.onResume) this.onResume(); }
-      else { if (this.onPause) this.onPause(); }
+      if (this.state.phase === 'running' && this.callbacks.onPause) {
+        this.callbacks.onPause();
+      }
+    });
+
+    this.screen.key(['r'], () => {
+      if (this.state.phase === 'paused' && this.callbacks.onResume) {
+        this.callbacks.onResume();
+      }
+    });
+
+    this.screen.key(['+', '='], () => {
+      if (this.callbacks.onSpeedUp) this.callbacks.onSpeedUp();
+    });
+
+    this.screen.key(['-', '_'], () => {
+      if (this.callbacks.onSpeedDown) this.callbacks.onSpeedDown();
     });
   }
 
   setCallbacks(callbacks) {
-    this.onPause = callbacks.onPause;
-    this.onResume = callbacks.onResume;
-    this.onQuit = callbacks.onQuit;
+    this.callbacks = { ...this.callbacks, ...callbacks };
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Update methods
+  // ─────────────────────────────────────────────────────────────
+
+  updateProgress(current, total) {
+    this.state.dorks.completed = current;
+    this.state.dorks.total = total;
+    
+    const pct = total > 0 ? (current / total) * 100 : 0;
+    const filled = Math.floor(pct / 2);
+    const empty = 50 - filled;
+    const bar = '█'.repeat(filled) + '░'.repeat(empty);
+    
+    const elapsed = this.formatDuration(this.state.timing.elapsed);
+    const eta = this.formatDuration(this.state.timing.eta);
+    const etaTime = this.state.timing.eta > 0 
+      ? new Date(Date.now() + this.state.timing.eta).toLocaleTimeString()
+      : '--:--:--';
+
+    this.widgets.progress.setContent(
+      `\n  {green-fg}${bar}{/}  ${pct.toFixed(1)}%\n` +
+      `  {bold}${this.formatNumber(current)}{/} / ${this.formatNumber(total)} dorks\n\n` +
+      `  Elapsed: {yellow-fg}${elapsed}{/}    Remaining: {cyan-fg}~${eta}{/}    ETA: {white-fg}${etaTime}{/}`
+    );
+    this.render();
   }
 
   updateStats(stats) {
-    this.state.stats = stats;
-    this.statsLcd.setDisplay(String(Math.round(stats.requests_per_sec)).padStart(5));
-    this.throughputHistory.push(stats.requests_per_sec);
-    if (this.throughputHistory.length > this.MAX_HISTORY) this.throughputHistory.shift();
-    this.sparkline.setData(['req/s'], [this.throughputHistory]);
-    this.statsTable.setData({
-      headers: ['Metric', 'Value'],
-      data: [
-        ['Dorks', formatNumber(stats.tasks_total)],
-        ['Completed', formatNumber(stats.tasks_completed)],
-        ['Failed', formatNumber(stats.tasks_failed)],
-        ['URLs', formatNumber(stats.urls_found)],
-        ['CAPTCHAs', formatNumber(stats.captcha_count)],
-        ['Elapsed', formatDuration(stats.elapsed_ms)],
-        ['ETA', formatDuration(stats.eta_ms)],
-      ],
-    });
+    this.state.stats = { ...this.state.stats, ...stats };
+    
+    const content = `
+  Requests/min:  {cyan-fg}${this.formatNumber(stats.requestsPerMin || 0)}{/}
+  Success rate:  {green-fg}${(stats.successRate || 0).toFixed(1)}%{/}
+  Active proxies: {yellow-fg}${stats.activeProxies || 0}{/}
+  
+  URLs found:     {bold}${this.formatNumber(stats.urlsFound || 0)}{/}
+  Unique domains: {bold}${this.formatNumber(stats.uniqueDomains || 0)}{/}`;
+    
+    this.widgets.stats.setContent(content);
     this.render();
   }
 
-  updateProgress(progress) {
-    this.state.progress = progress;
-    const pct = Math.min(100, Math.max(0, progress.percentage));
-    this.progressBar.setPercent(pct);
-    this.progressBar.setLabel(` Progress: ${formatNumber(progress.current)}/${formatNumber(progress.total)} (${pct.toFixed(1)}%) `);
+  updateThroughput(value) {
+    this.state.throughput.push(value);
+    if (this.state.throughput.length > 60) {
+      this.state.throughput.shift();
+    }
+    this.widgets.throughput.setData(['req/s'], [this.state.throughput]);
     this.render();
   }
 
-  updateProxyInfo(info) {
-    this.state.proxyInfo = info;
-    const total = info.total || 1;
-    this.proxyDonut.setData([
-      { label: `Alive:${info.alive}`, percent: String(Math.round((info.alive / total) * 100)), color: 'green' },
-      { label: `Dead:${info.dead}`, percent: String(Math.round((info.dead / total) * 100)), color: 'red' },
-    ]);
+  updateProxies(alive, dead, quarantined) {
+    this.state.proxies = { 
+      total: alive + dead + quarantined,
+      alive, dead, quarantined 
+    };
+
+    const data = [
+      { label: `Alive: ${alive}`, percent: alive, color: 'green' },
+      { label: `Dead: ${dead}`, percent: dead, color: 'red' },
+      { label: `Quar: ${quarantined}`, percent: quarantined, color: 'yellow' },
+    ].filter(d => d.percent > 0);
+
+    if (data.length > 0) {
+      // Convert to percentages for donut
+      const total = alive + dead + quarantined;
+      data.forEach(d => d.percent = String(Math.round((d.percent / total) * 100)));
+      this.widgets.proxies.setData(data);
+    }
     this.render();
   }
 
-  addActivity(entry) {
-    const time = new Date(entry.timestamp).toLocaleTimeString();
-    let color = 'white';
-    if (entry.type === 'success') color = 'green';
-    else if (entry.type === 'error') color = 'red';
-    else if (entry.type === 'warning') color = 'yellow';
-    const urls = entry.urls !== undefined ? ` → ${entry.urls} URLs` : '';
-    this.logBox.log(`{${color}-fg}${time}{/} ${entry.message}${urls}`);
+  updateResults(raw, filtered, domains) {
+    this.state.urls = { raw, filtered, domains };
+    
+    this.widgets.results.setContent(
+      `\n  Raw URLs:      {white-fg}${this.formatNumber(raw)}{/}\n` +
+      `  Filtered:      {green-fg}${this.formatNumber(filtered)}{/}\n` +
+      `  Domains:       {cyan-fg}${this.formatNumber(domains)}{/}`
+    );
     this.render();
   }
 
-  log(message, type = 'info') {
-    this.addActivity({ timestamp: Date.now(), type, message });
+  updateTiming(elapsed, eta) {
+    this.state.timing.elapsed = elapsed;
+    this.state.timing.eta = eta;
   }
 
-  setPaused(paused) {
-    this.state.isPaused = paused;
-    this.controlsBox.setContent(paused ? '{yellow-fg}PAUSED{/} [P] Resume [Q] Quit' : '[P] Pause [Q] Quit');
+  addActivity(type, dork, result) {
+    const time = new Date().toLocaleTimeString();
+    const icon = type === 'success' ? '{green-fg}✔{/}' 
+               : type === 'warning' ? '{yellow-fg}⚠{/}'
+               : type === 'error' ? '{red-fg}✖{/}'
+               : '{white-fg}ℹ{/}';
+    
+    const dorkShort = dork.length > 35 ? dork.substring(0, 32) + '...' : dork;
+    const line = `{gray-fg}${time}{/}  ${icon}  ${dorkShort.padEnd(35)}  ${result}`;
+    
+    this.widgets.activity.log(line);
     this.render();
   }
 
-  setRunning(running) { this.state.isRunning = running; }
+  // ─────────────────────────────────────────────────────────────
+  // Phase screens
+  // ─────────────────────────────────────────────────────────────
 
-  showComplete(stats, duration) {
-    blessed.box({
+  showInitPhase() {
+    this.state.phase = 'init';
+    this.widgets.progress.setLabel(' INITIALIZATION ');
+    this.widgets.progress.setContent('\n  Loading configuration...');
+    this.render();
+  }
+
+  showProxyReport(total, alive, dead, slow) {
+    const alivePct = ((alive / total) * 100).toFixed(1);
+    const barFilled = Math.floor((alive / total) * 30);
+    const bar = '{green-fg}' + '█'.repeat(barFilled) + '{/}' + '░'.repeat(30 - barFilled);
+
+    this.widgets.progress.setLabel(' PROXY HEALTH REPORT ');
+    this.widgets.progress.setContent(
+      `\n  Total:      ${this.formatNumber(total)}\n` +
+      `  {green-fg}✔ Alive:{/}    ${this.formatNumber(alive)}  (${alivePct}%)   ${bar}\n` +
+      `  {red-fg}✖ Dead:{/}     ${this.formatNumber(dead)}  (${((dead/total)*100).toFixed(1)}%)\n` +
+      `  {yellow-fg}⚠ Slow:{/}     ${this.formatNumber(slow)}  (${((slow/total)*100).toFixed(1)}%)\n\n` +
+      `  Recommended workers: {cyan-fg}${Math.floor(alive / 10)}{/}\n` +
+      `  {gray-fg}Press ENTER to start or CTRL+C to abort...{/}`
+    );
+    this.render();
+  }
+
+  showRunning() {
+    this.state.phase = 'running';
+    this.state.timing.started = Date.now();
+    this.widgets.progress.setLabel(' PROGRESS ');
+    this.widgets.controls.setContent('\n {bold}[P]{/} Pause  {bold}[R]{/} Resume\n {bold}[+/-]{/} Speed  {bold}[Q]{/} Quit');
+    this.render();
+  }
+
+  showPaused() {
+    this.state.phase = 'paused';
+    this.widgets.controls.setContent('\n {yellow-fg}{bold}⏸ PAUSED{/}\n\n {bold}[R]{/} Resume  {bold}[Q]{/} Save & Quit');
+    this.render();
+  }
+
+  showWarning(message) {
+    const box = blessed.box({
       parent: this.screen,
       top: 'center',
       left: 'center',
-      width: 50,
-      height: 10,
-      label: ' Complete ',
-      content: `\n  Completed: ${stats.tasks_completed} dorks\n  URLs: ${formatNumber(stats.urls_found)}\n  Duration: ${formatDuration(duration)}\n\n  Press any key to exit...`,
+      width: 60,
+      height: 7,
+      label: ' ⚠ WARNING ',
+      content: `\n  ${message}`,
+      tags: true,
       border: { type: 'line' },
-      style: { border: { fg: 'green' } },
+      style: { 
+        border: { fg: 'yellow' },
+        bg: 'black'
+      }
     });
-    this.screen.once('keypress', () => process.exit(0));
+
     this.render();
+    setTimeout(() => {
+      box.destroy();
+      this.render();
+    }, 5000);
   }
 
-  render() { this.screen.render(); }
-  destroy() { this.screen.destroy(); }
+  showCritical(message, options = ['Continue', 'Quit']) {
+    return new Promise((resolve) => {
+      const box = blessed.box({
+        parent: this.screen,
+        top: 'center',
+        left: 'center',
+        width: 65,
+        height: 10,
+        label: ' 🔴 CRITICAL ',
+        content: `\n  ${message}\n\n  ${options.map((o, i) => `{bold}[${i + 1}]{/} ${o}`).join('    ')}`,
+        tags: true,
+        border: { type: 'line' },
+        style: { 
+          border: { fg: 'red' },
+          bg: 'black'
+        }
+      });
+
+      this.render();
+
+      const handler = (ch, key) => {
+        const num = parseInt(ch);
+        if (num >= 1 && num <= options.length) {
+          this.screen.removeListener('keypress', handler);
+          box.destroy();
+          this.render();
+          resolve(options[num - 1]);
+        }
+      };
+
+      this.screen.on('keypress', handler);
+    });
+  }
+
+  showComplete(stats) {
+    this.state.phase = 'complete';
+    
+    // Hide other widgets content
+    this.widgets.throughput.setData([''], [[]]);
+    
+    const duration = this.formatDuration(stats.duration);
+    
+    this.widgets.progress.setLabel(' ✔ COMPLETE ');
+    this.widgets.progress.setContent(
+      `\n  {green-fg}All ${this.formatNumber(stats.totalDorks)} dorks processed{/}\n\n` +
+      `  Duration:        {yellow-fg}${duration}{/}\n` +
+      `  Total requests:  ${this.formatNumber(stats.totalRequests)}\n` +
+      `  Success rate:    {green-fg}${stats.successRate.toFixed(1)}%{/}`
+    );
+
+    this.widgets.stats.setLabel(' RESULTS ');
+    this.widgets.stats.setContent(
+      `\n  Raw URLs:           {white-fg}${this.formatNumber(stats.rawUrls)}{/}\n` +
+      `  After dedup:        {cyan-fg}${this.formatNumber(stats.afterDedup)}{/}\n` +
+      `  After anti-public:  {green-fg}${this.formatNumber(stats.afterFilter)}{/}\n` +
+      `  Final domains:      {bold}${this.formatNumber(stats.finalDomains)}{/}`
+    );
+
+    this.widgets.results.setLabel(' OUTPUT FILES ');
+    this.widgets.results.setContent(
+      `\n  {cyan-fg}${stats.outputDir}{/}\n` +
+      `  └── results.txt`
+    );
+
+    this.widgets.controls.setContent('\n\n  {gray-fg}Press any key to exit...{/}');
+
+    this.render();
+
+    this.screen.once('keypress', () => {
+      this.exit();
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Utilities
+  // ─────────────────────────────────────────────────────────────
+
+  formatNumber(num) {
+    return num.toLocaleString();
+  }
+
+  formatDuration(ms) {
+    if (!ms || ms < 0) return '0s';
+    
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+
+    if (hours > 0) {
+      return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${seconds % 60}s`;
+    }
+    return `${seconds}s`;
+  }
+
+  render() {
+    if (this.screen) {
+      this.screen.render();
+    }
+  }
+
+  exit() {
+    if (this.screen) {
+      this.screen.destroy();
+    }
+    process.exit(0);
+  }
 }
+
+// ─────────────────────────────────────────────────────────────
+// Simple console banner for non-TTY
+// ─────────────────────────────────────────────────────────────
 
 export function showBanner() {
   console.log('\x1b[36m');
   console.log('╔═══════════════════════════════════════════════════════════════════╗');
-  console.log('║                         DORKER v1.0.0                             ║');
-  console.log('║                   Google Dork Parser                              ║');
+  console.log('║     ██████╗  ██████╗ ██████╗ ██╗  ██╗███████╗██████╗              ║');
+  console.log('║     ██╔══██╗██╔═══██╗██╔══██╗██║ ██╔╝██╔════╝██╔══██╗             ║');
+  console.log('║     ██║  ██║██║   ██║██████╔╝█████╔╝ █████╗  ██████╔╝             ║');
+  console.log('║     ██║  ██║██║   ██║██╔══██╗██╔═██╗ ██╔══╝  ██╔══██╗             ║');
+  console.log('║     ██████╔╝╚██████╔╝██║  ██║██║  ██╗███████╗██║  ██║             ║');
+  console.log('║     ╚═════╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝             ║');
+  console.log('║                                                                   ║');
+  console.log('║                  Google Dork Parser v1.0.0                        ║');
   console.log('╚═══════════════════════════════════════════════════════════════════╝');
   console.log('\x1b[0m');
 }
