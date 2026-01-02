@@ -1,188 +1,445 @@
 /**
- * Scheduler
- * Dynamic task scheduling with adaptive concurrency and rate limiting
+ * Task Scheduler
+ * Coordinates dork processing with adaptive concurrency
  */
 
 import { EventEmitter } from 'events';
-import type {
-  ResultMessage,
-  ErrorMessage,
-  BlockedMessage,
-  StatsMessage,
-  EngineConfig,
-} from '../types/index.js';
-import { Engine, getEngine } from './engine.js';
-import { TaskQueue, getTaskQueue, TaskPriority } from './taskQueue.js';
+import { getEngine, Engine } from './engine.js';
+import { getTaskQueue, TaskQueue, TaskPriority } from './taskQueue.js';
 import { getLogger } from '../utils/logger.js';
+import type { EngineConfig, ResultMessage, ErrorMessage, StatusMessage } from '../types/index.js';
 
 const logger = getLogger();
 
-// Scheduler states
-export type SchedulerState = 'idle' | 'running' | 'paused' | 'stopping' | 'stopped' | 'completed';
-
-// Scheduler events
-export interface SchedulerEvents {
-  start: () => void;
-  pause: () => void;
-  resume: () => void;
-  stop: () => void;
-  complete: (stats: SchedulerStats) => void;
-  progress: (stats: SchedulerStats) => void;
-  result: (dork: string, urls: string[]) => void;
-  error: (dork: string, error: string) => void;
-  blocked: (dork: string, reason: string) => void;
+// Scheduler options
+export interface SchedulerOptions {
+  initialConcurrency: number;
+  minConcurrency: number;
+  maxConcurrency: number;
+  pagesPerDork: number;
+  maxRetries: number;
+  adaptiveConcurrency: boolean;
+  blockThreshold: number;
+  captchaThreshold: number;
 }
+
+const DEFAULT_OPTIONS: SchedulerOptions = {
+  initialConcurrency: 100,
+  minConcurrency: 10,
+  maxConcurrency: 500,
+  pagesPerDork: 5,
+  maxRetries: 3,
+  adaptiveConcurrency: true,
+  blockThreshold: 0.1,
+  captchaThreshold: 0.05,
+};
 
 // Scheduler statistics
 export interface SchedulerStats {
-  state: SchedulerState;
-  startTime: Date;
-  elapsed: number;
   totalDorks: number;
   completedDorks: number;
   failedDorks: number;
-  pendingDorks: number;
-  runningTasks: number;
   totalUrls: number;
   uniqueUrls: number;
   requestsPerMin: number;
   urlsPerMin: number;
   successRate: number;
-  eta: string;
   currentConcurrency: number;
-  activeProxies: number;
-  captchaCount: number;
   blockCount: number;
+  captchaCount: number;
+  elapsed: number;
+  eta: string;
+  startTime: Date;
 }
 
-// Scheduler options
-export interface SchedulerOptions {
-  initialConcurrency?: number;
-  minConcurrency?: number;
-  maxConcurrency?: number;
-  adaptiveConcurrency?: boolean;
-  targetSuccessRate?: number;
-  statsInterval?: number;
-  autoPages?: boolean;
-  pagesPerDork?: number;
-  maxRetries?: number;
+// Dork state
+interface DorkState {
+  dork: string;
+  currentPage: number;
+  maxPages: number;
+  urls: string[];
+  retries: number;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  error?: string;
 }
-
-const DEFAULT_OPTIONS: Required<SchedulerOptions> = {
-  initialConcurrency: 50,
-  minConcurrency: 10,
-  maxConcurrency: 200,
-  adaptiveConcurrency: true,
-  targetSuccessRate: 90,
-  statsInterval: 1000,
-  autoPages: true,
-  pagesPerDork: 5,
-  maxRetries: 3,
-};
 
 export class Scheduler extends EventEmitter {
+  private options: SchedulerOptions;
   private engine: Engine;
   private queue: TaskQueue;
-  private options: Required<SchedulerOptions>;
-  private state: SchedulerState = 'idle';
+  private dorkStates: Map<string, DorkState> = new Map();
+  private stats: SchedulerStats;
+  private running: boolean = false;
+  private paused: boolean = false;
   private startTime: Date | null = null;
-  private statsTimer: NodeJS.Timeout | null = null;
-  private processTimer: NodeJS.Timeout | null = null;
-  private currentConcurrency: number;
-  private totalDorks: number = 0;
-  private captchaCount: number = 0;
-  private blockCount: number = 0;
-  private recentResults: Array<{ success: boolean; timestamp: number }> = [];
-  private urlSet: Set<string> = new Set();
-  private allUrls: string[] = [];
+  private recentRequests: number[] = [];
+  private recentUrls: number[] = [];
 
-  constructor(options: SchedulerOptions = {}) {
+  constructor(options: Partial<SchedulerOptions> = {}) {
     super();
     this.options = { ...DEFAULT_OPTIONS, ...options };
-    this.currentConcurrency = this.options.initialConcurrency;
     this.engine = getEngine();
-    this.queue = getTaskQueue({
-      maxConcurrent: this.currentConcurrency,
-      maxRetries: this.options.maxRetries,
+    this.queue = getTaskQueue();
+    this.stats = this.initStats();
+  }
+
+  private initStats(): SchedulerStats {
+    return {
+      totalDorks: 0,
+      completedDorks: 0,
+      failedDorks: 0,
+      totalUrls: 0,
+      uniqueUrls: 0,
+      requestsPerMin: 0,
+      urlsPerMin: 0,
+      successRate: 0,
+      currentConcurrency: this.options.initialConcurrency,
+      blockCount: 0,
+      captchaCount: 0,
+      elapsed: 0,
+      eta: 'calculating...',
+      startTime: new Date(),
+    };
+  }
+
+  /**
+   * Start processing dorks
+   */
+  async start(dorks: string[], config: EngineConfig): Promise<void> {
+    if (this.running) {
+      throw new Error('Scheduler already running');
+    }
+
+    this.running = true;
+    this.paused = false;
+    this.startTime = new Date();
+    this.stats = this.initStats();
+    this.stats.totalDorks = dorks.length;
+    this.stats.startTime = this.startTime;
+
+    logger.info('Scheduler starting', {
+      dorks: dorks.length,
+      concurrency: this.options.initialConcurrency,
       pagesPerDork: this.options.pagesPerDork,
     });
 
-    this.setupEventHandlers();
-  }
-
-  /**
-   * Setup event handlers for engine and queue
-   */
-  private setupEventHandlers(): void {
-    // Engine events
-    this.engine.on('result', (message: ResultMessage) => {
-      this.handleResult(message);
-    });
-
-    this.engine.on('error', (message: ErrorMessage) => {
-      this.handleError(message);
-    });
-
-    this.engine.on('blocked', (message: BlockedMessage) => {
-      this.handleBlocked(message);
-    });
-
-    this.engine.on('stats', (message: StatsMessage) => {
-      this.handleStats(message);
-    });
-
-    // Queue events
-    this.queue.on('queueDrained', () => {
-      this.handleQueueDrained();
-    });
-  }
-
-  /**
-   * Initialize and start the scheduler
-   */
-  async start(dorks: string[], config: EngineConfig): Promise<void> {
-    if (this.state !== 'idle' && this.state !== 'stopped' && this.state !== 'completed') {
-      throw new Error(`Cannot start scheduler in state: ${this.state}`);
+    // Initialize dork states
+    for (const dork of dorks) {
+      this.dorkStates.set(dork, {
+        dork,
+        currentPage: 0,
+        maxPages: this.options.pagesPerDork,
+        urls: [],
+        retries: 0,
+        status: 'pending',
+      });
     }
 
-    logger.info('Starting scheduler', { dorkCount: dorks.length });
-
-    // Reset state
-    this.reset();
-    this.totalDorks = dorks.length;
-    this.startTime = new Date();
-
-    // Add dorks to queue
-    this.queue.addDorks(dorks, TaskPriority.NORMAL);
-
     // Start engine
-    await this.engine.start(config);
+    try {
+      await this.engine.start(config);
+    } catch (error) {
+      this.running = false;
+      throw error;
+    }
+
+    // Setup engine event handlers
+    this.setupEngineHandlers();
 
     // Start processing
-    this.state = 'running';
-    this.emit('start');
+    this.processQueue(dorks);
 
-    // Start stats timer
-    this.startStatsTimer();
+    // Start stats update interval
+    this.startStatsInterval();
+  }
 
-    // Start processing loop
-    this.processQueue();
+  /**
+   * Setup engine event handlers
+   */
+  private setupEngineHandlers(): void {
+    this.engine.on('result', (result: ResultMessage) => {
+      this.handleResult(result);
+    });
+
+    this.engine.on('error', (error: ErrorMessage) => {
+      this.handleError(error);
+    });
+
+    this.engine.on('status', (status: StatusMessage) => {
+      this.handleStatus(status);
+    });
+
+    this.engine.on('exit', () => {
+      if (this.running) {
+        logger.error('Engine exited unexpectedly');
+        this.emit('engineExit');
+      }
+    });
+  }
+
+  /**
+   * Process the queue
+   */
+  private async processQueue(dorks: string[]): Promise<void> {
+    // Add initial dorks to queue
+    for (const dork of dorks) {
+      this.queue.add({
+        id: `${dork}:0`,
+        dork,
+        page: 0,
+        priority: TaskPriority.NORMAL,
+        retries: 0,
+      });
+    }
+
+    // Process until complete
+    while (this.running && !this.isComplete()) {
+      if (this.paused) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        continue;
+      }
+
+      const task = this.queue.next();
+      if (!task) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+        continue;
+      }
+
+      // Send to engine
+      const state = this.dorkStates.get(task.dork);
+      if (state) {
+        state.status = 'running';
+      }
+
+      this.engine.search(task.id, task.dork, task.page);
+      this.recentRequests.push(Date.now());
+    }
+
+    // Complete
+    this.running = false;
+    this.emit('complete', this.stats);
+    logger.info('Scheduler completed', { stats: JSON.stringify(this.stats) });
+  }
+
+  /**
+   * Handle search result
+   */
+  private handleResult(result: ResultMessage): void {
+    const [dork, pageStr] = result.id.split(':');
+    const page = parseInt(pageStr, 10);
+    const state = this.dorkStates.get(dork);
+
+    if (!state) {
+      logger.warn('Result for unknown dork', { id: result.id });
+      return;
+    }
+
+    // Add URLs
+    if (result.urls && result.urls.length > 0) {
+      state.urls.push(...result.urls);
+      this.stats.totalUrls += result.urls.length;
+      this.recentUrls.push(Date.now());
+      this.emit('result', dork, result.urls);
+    }
+
+    // Check if more pages needed
+    if (result.has_next && page + 1 < state.maxPages) {
+      // Queue next page
+      this.queue.add({
+        id: `${dork}:${page + 1}`,
+        dork,
+        page: page + 1,
+        priority: TaskPriority.HIGH, // Prioritize continuation
+        retries: 0,
+      });
+      state.currentPage = page + 1;
+    } else {
+      // Dork complete
+      state.status = 'completed';
+      this.stats.completedDorks++;
+      this.stats.uniqueUrls += state.urls.length;
+      this.emit('dorkComplete', dork, state.urls);
+    }
+
+    this.updateStats();
+    this.emitProgress();
+  }
+
+  /**
+   * Handle error
+   */
+  private handleError(error: ErrorMessage): void {
+    const [dork, pageStr] = error.id.split(':');
+    const page = parseInt(pageStr, 10);
+    const state = this.dorkStates.get(dork);
+
+    if (!state) {
+      logger.warn('Error for unknown dork', { id: error.id });
+      return;
+    }
+
+    logger.debug('Search error', { dork, page, error: error.error });
+
+    // Check error type
+    if (error.error.includes('blocked') || error.error.includes('429')) {
+      this.stats.blockCount++;
+      this.emit('blocked', dork, error.error);
+      this.adjustConcurrency('block');
+    } else if (error.error.includes('captcha') || error.error.includes('unusual traffic')) {
+      this.stats.captchaCount++;
+      this.emit('captcha', dork, error.error);
+      this.adjustConcurrency('captcha');
+    }
+
+    // Retry logic
+    if (state.retries < this.options.maxRetries) {
+      state.retries++;
+      this.queue.add({
+        id: `${dork}:${page}`,
+        dork,
+        page,
+        priority: TaskPriority.LOW, // Lower priority for retries
+        retries: state.retries,
+      });
+    } else {
+      // Max retries reached
+      state.status = 'failed';
+      state.error = error.error;
+      this.stats.failedDorks++;
+      this.emit('dorkFailed', dork, error.error);
+    }
+
+    this.emit('error', dork, error.error);
+    this.updateStats();
+    this.emitProgress();
+  }
+
+  /**
+   * Handle status update
+   */
+  private handleStatus(status: StatusMessage): void {
+    if (status.proxy_stats) {
+      this.emit('proxyStatus', status.proxy_stats);
+    }
+  }
+
+  /**
+   * Adjust concurrency based on errors
+   */
+  private adjustConcurrency(reason: 'block' | 'captcha'): void {
+    if (!this.options.adaptiveConcurrency) return;
+
+    const reduction = reason === 'captcha' ? 0.3 : 0.1;
+    const newConcurrency = Math.max(
+      this.options.minConcurrency,
+      Math.floor(this.stats.currentConcurrency * (1 - reduction))
+    );
+
+    if (newConcurrency !== this.stats.currentConcurrency) {
+      logger.info('Adjusting concurrency', {
+        reason,
+        from: this.stats.currentConcurrency,
+        to: newConcurrency,
+      });
+      this.stats.currentConcurrency = newConcurrency;
+      this.emit('concurrencyChange', newConcurrency);
+    }
+  }
+
+  /**
+   * Update statistics
+   */
+  private updateStats(): void {
+    const now = Date.now();
+    const oneMinuteAgo = now - 60000;
+
+    // Clean old entries
+    this.recentRequests = this.recentRequests.filter(t => t > oneMinuteAgo);
+    this.recentUrls = this.recentUrls.filter(t => t > oneMinuteAgo);
+
+    // Calculate rates
+    this.stats.requestsPerMin = this.recentRequests.length;
+    this.stats.urlsPerMin = this.recentUrls.length;
+
+    // Calculate success rate
+    const totalProcessed = this.stats.completedDorks + this.stats.failedDorks;
+    this.stats.successRate = totalProcessed > 0
+      ? (this.stats.completedDorks / totalProcessed) * 100
+      : 0;
+
+    // Calculate elapsed and ETA
+    if (this.startTime) {
+      this.stats.elapsed = now - this.startTime.getTime();
+
+      if (this.stats.completedDorks > 0 && this.stats.requestsPerMin > 0) {
+        const remaining = this.stats.totalDorks - this.stats.completedDorks;
+        const avgTimePerDork = this.stats.elapsed / this.stats.completedDorks;
+        const etaMs = remaining * avgTimePerDork;
+        this.stats.eta = this.formatDuration(etaMs);
+      }
+    }
+  }
+
+  /**
+   * Format duration
+   */
+  private formatDuration(ms: number): string {
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+
+    if (hours > 0) {
+      return `${hours}h ${minutes % 60}m`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${seconds % 60}s`;
+    } else {
+      return `${seconds}s`;
+    }
+  }
+
+  /**
+   * Emit progress event
+   */
+  private emitProgress(): void {
+    this.emit('progress', { ...this.stats });
+  }
+
+  /**
+   * Start stats update interval
+   */
+  private startStatsInterval(): void {
+    const interval = setInterval(() => {
+      if (!this.running) {
+        clearInterval(interval);
+        return;
+      }
+      this.updateStats();
+      this.emitProgress();
+    }, 1000);
+  }
+
+  /**
+   * Check if processing is complete
+   */
+  private isComplete(): boolean {
+    if (this.queue.size() > 0) return false;
+
+    for (const state of this.dorkStates.values()) {
+      if (state.status === 'pending' || state.status === 'running') {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   /**
    * Pause processing
    */
   pause(): void {
-    if (this.state !== 'running') {
-      return;
-    }
-
-    this.state = 'paused';
+    this.paused = true;
     this.engine.pause();
-    this.queue.pause();
-    this.stopTimers();
-
-    this.emit('pause');
+    this.emit('paused');
     logger.info('Scheduler paused');
   }
 
@@ -190,17 +447,9 @@ export class Scheduler extends EventEmitter {
    * Resume processing
    */
   resume(): void {
-    if (this.state !== 'paused') {
-      return;
-    }
-
-    this.state = 'running';
+    this.paused = false;
     this.engine.resume();
-    this.queue.resume();
-    this.startStatsTimer();
-    this.processQueue();
-
-    this.emit('resume');
+    this.emit('resumed');
     logger.info('Scheduler resumed');
   }
 
@@ -208,386 +457,88 @@ export class Scheduler extends EventEmitter {
    * Stop processing
    */
   async stop(): Promise<void> {
-    if (this.state === 'stopped' || this.state === 'idle') {
-      return;
-    }
-
-    this.state = 'stopping';
-    this.stopTimers();
-
+    this.running = false;
     await this.engine.stop();
-    this.queue.pause();
-
-    this.state = 'stopped';
-    this.emit('stop');
+    this.emit('stopped', this.stats);
     logger.info('Scheduler stopped');
   }
 
   /**
-   * Process the queue
-   */
-  private processQueue(): void {
-    if (this.state !== 'running') {
-      return;
-    }
-
-    // Get available slots
-    const availableSlots = this.currentConcurrency - this.queue.getRunningCount();
-
-    if (availableSlots <= 0) {
-      // Schedule next check
-      this.scheduleNextProcess(100);
-      return;
-    }
-
-    // Get next batch of tasks
-    const tasks = this.queue.getNextBatch(availableSlots);
-
-    if (tasks.length === 0) {
-      if (!this.queue.hasRunning()) {
-        // No more tasks
-        return;
-      }
-      // Wait for running tasks
-      this.scheduleNextProcess(100);
-      return;
-    }
-
-    // Send tasks to engine
-    for (const task of tasks) {
-      this.engine.sendTask(task.dork, task.page);
-    }
-
-    this.engine.setRunning();
-
-    // Schedule next processing
-    this.scheduleNextProcess(50);
-  }
-
-  /**
-   * Schedule next queue processing
-   */
-  private scheduleNextProcess(delay: number): void {
-    if (this.processTimer) {
-      clearTimeout(this.processTimer);
-    }
-
-    this.processTimer = setTimeout(() => {
-      this.processQueue();
-    }, delay);
-  }
-
-  /**
-   * Handle result from engine
-   */
-  private handleResult(message: ResultMessage): void {
-    // Record success
-    this.recordResult(true);
-
-    // Store URLs
-    for (const url of message.urls) {
-      this.allUrls.push(url);
-      this.urlSet.add(url);
-    }
-
-    // Complete task in queue
-    this.queue.complete(message.task_id, message.urls, message.has_next_page && this.options.autoPages);
-
-    // Emit result event
-    this.emit('result', message.dork, message.urls);
-
-    // Adjust concurrency if needed
-    if (this.options.adaptiveConcurrency) {
-      this.adjustConcurrency();
-    }
-  }
-
-  /**
-   * Handle error from engine
-   */
-  private handleError(message: ErrorMessage): void {
-    if (message.task_id) {
-      this.recordResult(false);
-      this.queue.fail(message.task_id, message.message, !message.fatal);
-      this.emit('error', message.task_id, message.message);
-    }
-
-    if (message.fatal) {
-      logger.error('Fatal engine error', { message: message.message });
-      this.stop();
-    }
-  }
-
-  /**
-   * Handle blocked notification
-   */
-  private handleBlocked(message: BlockedMessage): void {
-    this.recordResult(false);
-    this.blockCount++;
-
-    if (message.reason === 'captcha') {
-      this.captchaCount++;
-    }
-
-    this.queue.block(message.task_id, message.reason);
-    this.emit('blocked', message.dork, message.reason);
-
-    // Reduce concurrency on blocks
-    if (this.options.adaptiveConcurrency) {
-      this.reduceConcurrency();
-    }
-  }
-
-  /**
-   * Handle stats from engine
-   */
-  private handleStats(message: StatsMessage): void {
-    // Could use for additional metrics
-    logger.debug('Engine stats received', {
-      requests: message.total_requests,
-      success: message.success_requests,
-      proxies: message.active_proxies,
-    });
-  }
-
-  /**
-   * Handle queue drained
-   */
-  private handleQueueDrained(): void {
-    if (this.state !== 'running') {
-      return;
-    }
-
-    this.state = 'completed';
-    this.stopTimers();
-
-    const stats = this.getStats();
-    this.emit('complete', stats);
-    logger.info('Scheduler completed', stats);
-  }
-
-  /**
-   * Record result for success rate tracking
-   */
-  private recordResult(success: boolean): void {
-    const now = Date.now();
-    this.recentResults.push({ success, timestamp: now });
-
-    // Keep only last 100 results
-    if (this.recentResults.length > 100) {
-      this.recentResults.shift();
-    }
-  }
-
-  /**
-   * Get recent success rate
-   */
-  private getRecentSuccessRate(): number {
-    if (this.recentResults.length === 0) {
-      return 100;
-    }
-
-    const successCount = this.recentResults.filter(r => r.success).length;
-    return (successCount / this.recentResults.length) * 100;
-  }
-
-  /**
-   * Adjust concurrency based on success rate
-   */
-  private adjustConcurrency(): void {
-    const successRate = this.getRecentSuccessRate();
-    const target = this.options.targetSuccessRate;
-
-    if (successRate >= target + 5 && this.currentConcurrency < this.options.maxConcurrency) {
-      // Increase concurrency
-      this.currentConcurrency = Math.min(
-        this.currentConcurrency + 5,
-        this.options.maxConcurrency
-      );
-      this.queue.setMaxConcurrent(this.currentConcurrency);
-      logger.debug('Increased concurrency', { to: this.currentConcurrency, successRate });
-    }
-  }
-
-  /**
-   * Reduce concurrency (on blocks/errors)
-   */
-  private reduceConcurrency(): void {
-    if (this.currentConcurrency > this.options.minConcurrency) {
-      this.currentConcurrency = Math.max(
-        this.currentConcurrency - 10,
-        this.options.minConcurrency
-      );
-      this.queue.setMaxConcurrent(this.currentConcurrency);
-      logger.debug('Reduced concurrency', { to: this.currentConcurrency });
-    }
-  }
-
-  /**
-   * Start stats timer
-   */
-  private startStatsTimer(): void {
-    if (this.statsTimer) {
-      clearInterval(this.statsTimer);
-    }
-
-    this.statsTimer = setInterval(() => {
-      const stats = this.getStats();
-      this.emit('progress', stats);
-    }, this.options.statsInterval);
-  }
-
-  /**
-   * Stop all timers
-   */
-  private stopTimers(): void {
-    if (this.statsTimer) {
-      clearInterval(this.statsTimer);
-      this.statsTimer = null;
-    }
-
-    if (this.processTimer) {
-      clearTimeout(this.processTimer);
-      this.processTimer = null;
-    }
-  }
-
-  /**
-   * Reset scheduler state
-   */
-  private reset(): void {
-    this.queue.clearAll();
-    this.urlSet.clear();
-    this.allUrls = [];
-    this.recentResults = [];
-    this.captchaCount = 0;
-    this.blockCount = 0;
-    this.totalDorks = 0;
-    this.startTime = null;
-    this.currentConcurrency = this.options.initialConcurrency;
-  }
-
-  /**
-   * Get current statistics
+   * Get current stats
    */
   getStats(): SchedulerStats {
-    const queueStats = this.queue.getStats();
-    const elapsed = this.startTime ? Date.now() - this.startTime.getTime() : 0;
-    const elapsedMin = elapsed / 60000;
-
-    const requestsPerMin = elapsedMin > 0 ? queueStats.completed / elapsedMin : 0;
-    const urlsPerMin = elapsedMin > 0 ? this.allUrls.length / elapsedMin : 0;
-
-    // Calculate ETA
-    let eta = 'Calculating...';
-    if (requestsPerMin > 0 && queueStats.pending > 0) {
-      const remainingMin = queueStats.pending / requestsPerMin;
-      if (remainingMin < 60) {
-        eta = `${Math.ceil(remainingMin)}m`;
-      } else {
-        const hours = Math.floor(remainingMin / 60);
-        const mins = Math.ceil(remainingMin % 60);
-        eta = `${hours}h ${mins}m`;
-      }
-    } else if (queueStats.pending === 0) {
-      eta = 'Complete';
-    }
-
-    return {
-      state: this.state,
-      startTime: this.startTime || new Date(),
-      elapsed,
-      totalDorks: this.totalDorks,
-      completedDorks: queueStats.completed,
-      failedDorks: queueStats.failed,
-      pendingDorks: queueStats.pending,
-      runningTasks: queueStats.running,
-      totalUrls: this.allUrls.length,
-      uniqueUrls: this.urlSet.size,
-      requestsPerMin: Math.round(requestsPerMin * 10) / 10,
-      urlsPerMin: Math.round(urlsPerMin * 10) / 10,
-      successRate: Math.round(queueStats.successRate * 10) / 10,
-      eta,
-      currentConcurrency: this.currentConcurrency,
-      activeProxies: 0, // Updated from engine stats
-      captchaCount: this.captchaCount,
-      blockCount: this.blockCount,
-    };
-  }
-
-  /**
-   * Get current state
-   */
-  getState(): SchedulerState {
-    return this.state;
-  }
-
-  /**
-   * Get all URLs collected
-   */
-  getUrls(): string[] {
-    return [...this.allUrls];
-  }
-
-  /**
-   * Get unique URLs collected
-   */
-  getUniqueUrls(): string[] {
-    return [...this.urlSet];
-  }
-
-  /**
-   * Get failed dorks
-   */
-  getFailedDorks(): string[] {
-    return this.queue.getFailedDorks();
+    return { ...this.stats };
   }
 
   /**
    * Check if running
    */
   isRunning(): boolean {
-    return this.state === 'running';
+    return this.running;
   }
 
   /**
-   * Check if completed
+   * Check if paused
    */
-  isCompleted(): boolean {
-    return this.state === 'completed';
+  isPaused(): boolean {
+    return this.paused;
   }
 
   /**
-   * Export state for resume
+   * Get pending dorks
    */
-  exportState(): object {
-    return {
-      stats: this.getStats(),
-      queue: this.queue.exportState(),
-      urls: this.allUrls,
-    };
+  getPendingDorks(): string[] {
+    const pending: string[] = [];
+    for (const [dork, state] of this.dorkStates) {
+      if (state.status === 'pending' || state.status === 'running') {
+        pending.push(dork);
+      }
+    }
+    return pending;
+  }
+
+  /**
+   * Get completed dorks
+   */
+  getCompletedDorks(): string[] {
+    const completed: string[] = [];
+    for (const [dork, state] of this.dorkStates) {
+      if (state.status === 'completed') {
+        completed.push(dork);
+      }
+    }
+    return completed;
+  }
+
+  /**
+   * Get failed dorks
+   */
+  getFailedDorks(): Array<{ dork: string; error: string }> {
+    const failed: Array<{ dork: string; error: string }> = [];
+    for (const [dork, state] of this.dorkStates) {
+      if (state.status === 'failed') {
+        failed.push({ dork, error: state.error || 'Unknown error' });
+      }
+    }
+    return failed;
   }
 }
 
 // Singleton instance
 let schedulerInstance: Scheduler | null = null;
 
-/**
- * Get or create scheduler instance
- */
-export function getScheduler(options?: SchedulerOptions): Scheduler {
+export function getScheduler(options?: Partial<SchedulerOptions>): Scheduler {
   if (!schedulerInstance) {
     schedulerInstance = new Scheduler(options);
   }
   return schedulerInstance;
 }
 
-/**
- * Reset scheduler instance
- */
 export async function resetScheduler(): Promise<void> {
   if (schedulerInstance) {
-    await schedulerInstance.stop();
+    if (schedulerInstance.isRunning()) {
+      await schedulerInstance.stop();
+    }
     schedulerInstance = null;
   }
 }
