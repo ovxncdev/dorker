@@ -9,7 +9,10 @@ export class WorkerIPC extends EventEmitter {
     this.process = null;
     this.readline = null;
     this.connected = false;
+    this.initialized = false;
     this.queue = [];
+    this._startupResolve = null;
+    this._startupTimeout = null;
   }
 
   async start() {
@@ -29,15 +32,13 @@ export class WorkerIPC extends EventEmitter {
           const msg = JSON.parse(line);
           this.handleMessage(msg);
         } catch (e) {
-          // Non-JSON output, ignore or log
+          // Non-JSON output
         }
       });
 
       this.process.stderr.on('data', (data) => {
         const text = data.toString().trim();
-        if (text) {
-          this.emit('log', 'debug', text);
-        }
+        if (text) this.emit('log', 'debug', text);
       });
 
       this.process.on('error', (err) => {
@@ -50,17 +51,18 @@ export class WorkerIPC extends EventEmitter {
         this.emit('close', code);
       });
 
-      // Wait for ready message
-      const timeout = setTimeout(() => {
+      // Store resolve for when we get "ready" status
+      this._startupResolve = resolve;
+      this._startupTimeout = setTimeout(() => {
         reject(new Error('Worker startup timeout (10s)'));
       }, 10000);
 
-      this.once('ready', () => {
-        clearTimeout(timeout);
+      // Worker waits for init command, so mark as connected immediately
+      // and send init. The "ready" status will confirm it's working.
+      setTimeout(() => {
         this.connected = true;
-        this.flushQueue();
-        resolve();
-      });
+        this.emit('spawned');
+      }, 50);
     });
   }
 
@@ -68,12 +70,29 @@ export class WorkerIPC extends EventEmitter {
     const { type, data } = msg;
 
     switch (type) {
-      case 'ready':
-        this.emit('ready');
-        break;
-
       case 'status':
-        this.emit('status', data?.status, data?.message);
+        if (data?.status === 'ready') {
+          // Worker acknowledged init, now fully ready
+          if (this._startupTimeout) {
+            clearTimeout(this._startupTimeout);
+            this._startupTimeout = null;
+          }
+          if (this._startupResolve) {
+            this._startupResolve();
+            this._startupResolve = null;
+          }
+          this.emit('ready');
+        } else if (data?.status === 'initialized') {
+          this.initialized = true;
+          this.flushQueue();
+          this.emit('initialized', data?.message);
+        } else if (data?.status === 'paused') {
+          this.emit('paused');
+        } else if (data?.status === 'resumed') {
+          this.emit('resumed');
+        } else {
+          this.emit('status', data?.status, data?.message);
+        }
         break;
 
       case 'result':
@@ -143,26 +162,19 @@ export class WorkerIPC extends EventEmitter {
       data
     };
 
-    if (this.connected && this.process?.stdin?.writable) {
+    if (this.process?.stdin?.writable) {
       this.process.stdin.write(JSON.stringify(msg) + '\n');
-    } else {
-      this.queue.push(msg);
     }
   }
 
   flushQueue() {
     while (this.queue.length > 0) {
       const msg = this.queue.shift();
-      if (this.process?.stdin?.writable) {
-        this.process.stdin.write(JSON.stringify(msg) + '\n');
-      }
+      this.send(msg.type, msg.data);
     }
   }
 
-  // ─────────────────────────────────────────────────────────────
   // Commands
-  // ─────────────────────────────────────────────────────────────
-
   init(config) {
     this.send('init', {
       workers: config.workers || 10,
@@ -190,38 +202,13 @@ export class WorkerIPC extends EventEmitter {
     });
   }
 
-  submitBatch(dorks, batchSize = 100) {
-    for (let i = 0; i < dorks.length; i += batchSize) {
-      const batch = dorks.slice(i, i + batchSize);
-      batch.forEach((dork, j) => {
-        this.submitTask(dork, `task_${i + j}`);
-      });
-    }
-  }
+  pause() { this.send('pause'); }
+  resume() { this.send('resume'); }
+  getStats() { this.send('get_stats'); }
+  shutdown() { this.send('shutdown'); }
 
-  pause() {
-    this.send('pause');
-  }
-
-  resume() {
-    this.send('resume');
-  }
-
-  getStats() {
-    this.send('get_stats');
-  }
-
-  shutdown() {
-    this.send('shutdown');
-  }
-
-  // ─────────────────────────────────────────────────────────────
-  // State
-  // ─────────────────────────────────────────────────────────────
-
-  isConnected() {
-    return this.connected;
-  }
+  isConnected() { return this.connected; }
+  isInitialized() { return this.initialized; }
 
   kill() {
     if (this.process) {
