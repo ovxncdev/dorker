@@ -117,20 +117,27 @@ async function runCommand(opts) {
     urlsRaw: 0,
     urlsFiltered: 0,
     lastStats: null,
-    failedDorks: []
+    failedDorks: [],
+    tasksSubmitted: false
   };
 
-  // Worker events - status handles ready/initialized
+  // Worker events
   worker.on('status', (status, message) => {
+    log(ui, 'info', `Status: ${status} - ${message || ''}`);
+    
     if (status === 'ready') {
       log(ui, 'success', 'Worker ready');
     } else if (status === 'initialized') {
       log(ui, 'success', `Initialized: ${message}`);
       if (ui) ui.showRunning();
 
-      // Submit tasks
-      worker.submitTasks(dorks);
-      log(ui, 'info', `Submitted ${formatNumber(dorks.length)} tasks`);
+      // Submit tasks only once
+      if (!state.tasksSubmitted) {
+        state.tasksSubmitted = true;
+        log(ui, 'info', `Submitting ${formatNumber(dorks.length)} tasks...`);
+        worker.submitTasks(dorks);
+        log(ui, 'success', `Submitted ${formatNumber(dorks.length)} tasks`);
+      }
     } else if (status === 'paused') {
       log(ui, 'warning', 'Paused');
       if (ui) ui.showPaused();
@@ -155,19 +162,11 @@ async function runCommand(opts) {
         }
       }
 
-      if (ui) {
-        ui.addActivity('success', dork, `→ ${urls.length} URLs`);
-      }
+      log(ui, 'success', `${dork.substring(0, 30)}... → ${urls.length} URLs`);
     } else {
       state.failed++;
       state.failedDorks.push(dork);
-
-      if (ui) {
-        const msg = status === 'captcha' ? '→ CAPTCHA'
-                  : status === 'blocked' ? '→ Blocked'
-                  : `→ ${error || status}`;
-        ui.addActivity(status === 'captcha' ? 'warning' : 'error', dork, msg);
-      }
+      log(ui, 'error', `${dork.substring(0, 30)}... → ${error || status}`);
     }
   });
 
@@ -209,6 +208,12 @@ async function runCommand(opts) {
 
   worker.on('error', (code, message) => {
     log(ui, 'error', `[${code}] ${message}`);
+  });
+
+  worker.on('log', (level, message) => {
+    if (level !== 'debug') {
+      log(ui, 'info', `[${level}] ${message}`);
+    }
   });
 
   worker.on('close', (code) => {
@@ -292,7 +297,6 @@ async function runCommand(opts) {
   try {
     await worker.start();
     
-    // Send init right after start
     log(ui, 'info', 'Sending init to worker...');
     worker.init({
       workers: parseInt(opts.workers),
