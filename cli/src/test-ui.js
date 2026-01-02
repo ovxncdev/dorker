@@ -1,5 +1,3 @@
-
-#!/usr/bin/env node
 import { DorkerUI } from './ui.js';
 
 const ui = new DorkerUI();
