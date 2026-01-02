@@ -1,20 +1,19 @@
 {
   "name": "dorker-cli",
   "version": "1.0.0",
-  "description": "High-performance Google Dork parser CLI",
   "type": "module",
   "main": "src/index.js",
   "bin": {
     "dorker": "./src/index.js"
   },
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "setup": "node scripts/setup.js"
   },
   "dependencies": {
+    "commander": "^12.1.0",
     "blessed": "^0.1.81",
     "blessed-contrib": "^4.11.0",
-    "commander": "^12.1.0",
-    "bloom-filters": "^3.0.1",
-    "yaml": "^2.4.1"
+    "inquirer": "^9.2.15"
   }
 }
