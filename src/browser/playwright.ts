@@ -75,7 +75,6 @@ const BROWSER_USER_AGENTS = [
 
 /**
  * Browser Context Pool
- * Manages multiple browser contexts for parallel scraping
  */
 export class BrowserPool {
   private config: BrowserPoolConfig;
@@ -89,9 +88,6 @@ export class BrowserPool {
     this.config = { ...DEFAULT_CONFIG, ...config };
   }
 
-  /**
-   * Initialize the browser pool
-   */
   async initialize(): Promise<void> {
     if (this.initialized) return;
 
@@ -101,7 +97,6 @@ export class BrowserPool {
       maxContexts: this.config.maxContexts,
     });
 
-    // Launch browser
     const launchOptions = {
       headless: this.config.headless,
       args: STEALTH_ARGS,
@@ -118,7 +113,6 @@ export class BrowserPool {
         this.browser = await chromium.launch(launchOptions);
     }
 
-    // Create initial contexts
     for (let i = 0; i < this.config.maxContexts; i++) {
       const context = await this.createContext();
       this.contexts.push(context);
@@ -129,9 +123,6 @@ export class BrowserPool {
     logger.info('Browser pool initialized', { contexts: this.contexts.length });
   }
 
-  /**
-   * Create a new browser context with stealth settings
-   */
   private async createContext(): Promise<BrowserContext> {
     if (!this.browser) {
       throw new Error('Browser not initialized');
@@ -151,61 +142,29 @@ export class BrowserPool {
       ignoreHTTPSErrors: true,
     };
 
-    // Add proxy if configured
     if (this.config.proxy) {
       contextOptions.proxy = this.config.proxy;
     }
 
     const context = await this.browser.newContext(contextOptions);
 
-    // Add stealth scripts
-    await context.addInitScript(() => {
-      // Override webdriver
-      Object.defineProperty(navigator, 'webdriver', {
-        get: () => false,
-      });
-
-      // Override plugins
-      Object.defineProperty(navigator, 'plugins', {
-        get: () => [1, 2, 3, 4, 5],
-      });
-
-      // Override languages
-      Object.defineProperty(navigator, 'languages', {
-        get: () => ['en-US', 'en'],
-      });
-
-      // Override platform
-      Object.defineProperty(navigator, 'platform', {
-        get: () => 'Win32',
-      });
-
-      // Override chrome
-      (window as any).chrome = {
-        runtime: {},
-      };
-
-      // Override permissions
-      const originalQuery = window.navigator.permissions.query;
-      window.navigator.permissions.query = (parameters: any) => (
-        parameters.name === 'notifications'
-          ? Promise.resolve({ state: Notification.permission } as PermissionStatus)
-          : originalQuery(parameters)
-      );
-    });
+    // Add stealth scripts (these run in browser context)
+    await context.addInitScript(`
+      Object.defineProperty(navigator, 'webdriver', { get: () => false });
+      Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+      Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+      Object.defineProperty(navigator, 'platform', { get: () => 'Win32' });
+      window.chrome = { runtime: {} };
+    `);
 
     return context;
   }
 
-  /**
-   * Acquire a context from the pool
-   */
   async acquire(): Promise<BrowserContext> {
     if (!this.initialized) {
       await this.initialize();
     }
 
-    // Wait for available context
     while (this.availableContexts.length === 0) {
       await new Promise(resolve => setTimeout(resolve, 100));
     }
@@ -215,9 +174,6 @@ export class BrowserPool {
     return context;
   }
 
-  /**
-   * Release a context back to the pool
-   */
   release(context: BrowserContext): void {
     if (this.busyContexts.has(context)) {
       this.busyContexts.delete(context);
@@ -225,9 +181,6 @@ export class BrowserPool {
     }
   }
 
-  /**
-   * Close and destroy the pool
-   */
   async destroy(): Promise<void> {
     for (const context of this.contexts) {
       await context.close();
@@ -245,9 +198,6 @@ export class BrowserPool {
     logger.info('Browser pool destroyed');
   }
 
-  /**
-   * Get pool stats
-   */
   getStats(): { total: number; available: number; busy: number } {
     return {
       total: this.contexts.length,
@@ -259,7 +209,6 @@ export class BrowserPool {
 
 /**
  * Browser Search Engine
- * Performs Google searches using Playwright
  */
 export class BrowserSearchEngine {
   private pool: BrowserPool;
@@ -270,9 +219,6 @@ export class BrowserSearchEngine {
     this.timeout = timeout;
   }
 
-  /**
-   * Perform a Google search
-   */
   async search(dork: string, page: number = 0): Promise<BrowserSearchResult> {
     const context = await this.pool.acquire();
 
@@ -298,115 +244,49 @@ export class BrowserSearchEngine {
     }
   }
 
-  /**
-   * Perform the actual search
-   */
   private async performSearch(page: Page, dork: string, pageNum: number): Promise<BrowserSearchResult> {
     const start = pageNum * 10;
     const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(dork)}&start=${start}&num=10`;
 
-    // Navigate to Google
     await page.goto(searchUrl, { waitUntil: 'networkidle' });
-
-    // Random delay to appear human
     await page.waitForTimeout(1000 + Math.random() * 2000);
 
-    // Check for CAPTCHA
     const captchaDetected = await this.detectCaptcha(page);
     if (captchaDetected) {
-      logger.warn('CAPTCHA detected in browser', { dork });
-      return {
-        urls: [],
-        hasNextPage: false,
-        blocked: false,
-        captcha: true,
-      };
+      return { urls: [], hasNextPage: false, blocked: false, captcha: true };
     }
 
-    // Check for block
     const blocked = await this.detectBlock(page);
     if (blocked) {
-      logger.warn('Block detected in browser', { dork });
-      return {
-        urls: [],
-        hasNextPage: false,
-        blocked: true,
-        captcha: false,
-      };
+      return { urls: [], hasNextPage: false, blocked: true, captcha: false };
     }
 
-    // Extract URLs
     const urls = await this.extractUrls(page);
-
-    // Check for next page
     const hasNextPage = await this.hasNextPage(page);
 
-    return {
-      urls,
-      hasNextPage,
-      blocked: false,
-      captcha: false,
-    };
+    return { urls, hasNextPage, blocked: false, captcha: false };
   }
 
-  /**
-   * Detect CAPTCHA on page
-   */
   private async detectCaptcha(page: Page): Promise<boolean> {
-    const captchaSelectors = [
-      '#captcha',
-      '.g-recaptcha',
-      'iframe[src*="recaptcha"]',
-      '[data-sitekey]',
-    ];
+    const captchaSelectors = ['#captcha', '.g-recaptcha', 'iframe[src*="recaptcha"]', '[data-sitekey]'];
 
     for (const selector of captchaSelectors) {
       const element = await page.$(selector);
-      if (element) {
-        return true;
-      }
+      if (element) return true;
     }
 
-    // Check page content
     const content = await page.content();
-    if (
-      content.includes('unusual traffic') ||
-      content.includes('captcha') ||
-      content.includes('robot')
-    ) {
-      return true;
-    }
-
-    return false;
+    return content.includes('unusual traffic') || content.includes('captcha') || content.includes('robot');
   }
 
-  /**
-   * Detect if blocked
-   */
   private async detectBlock(page: Page): Promise<boolean> {
     const content = await page.content();
-    
-    return (
-      content.includes('blocked') ||
-      content.includes('forbidden') ||
-      content.includes('access denied') ||
-      content.includes('sorry')
-    );
+    return content.includes('blocked') || content.includes('forbidden') || content.includes('access denied');
   }
 
-  /**
-   * Extract URLs from search results
-   */
   private async extractUrls(page: Page): Promise<string[]> {
     const urls: string[] = [];
-
-    // Try multiple selectors for Google search results
-    const selectors = [
-      'a[data-ved] h3',
-      '.yuRUbf a',
-      '#search a[href^="http"]',
-      '.g a[href^="http"]',
-    ];
+    const selectors = ['a[data-ved] h3', '.yuRUbf a', '#search a[href^="http"]', '.g a[href^="http"]'];
 
     for (const selector of selectors) {
       const elements = await page.$$(selector);
@@ -414,9 +294,8 @@ export class BrowserSearchEngine {
       for (const element of elements) {
         try {
           let href: string | null = null;
-
-          // Check if element is link or parent is link
           const tagName = await element.evaluate(el => el.tagName.toLowerCase());
+          
           if (tagName === 'a') {
             href = await element.getAttribute('href');
           } else {
@@ -427,18 +306,12 @@ export class BrowserSearchEngine {
           }
 
           if (href && href.startsWith('http') && !href.includes('google.com')) {
-            // Clean Google redirect URLs
             if (href.includes('/url?')) {
               const urlObj = new URL(href);
               const actualUrl = urlObj.searchParams.get('q') || urlObj.searchParams.get('url');
-              if (actualUrl) {
-                href = actualUrl;
-              }
+              if (actualUrl) href = actualUrl;
             }
-
-            if (!urls.includes(href)) {
-              urls.push(href);
-            }
+            if (!urls.includes(href)) urls.push(href);
           }
         } catch {
           // Ignore extraction errors
@@ -448,48 +321,21 @@ export class BrowserSearchEngine {
       if (urls.length > 0) break;
     }
 
-    // Fallback: extract all links
-    if (urls.length === 0) {
-      const allLinks = await page.$$eval('a[href^="http"]', links =>
-        links
-          .map(a => a.getAttribute('href'))
-          .filter(href => href && !href.includes('google.com'))
-      );
-
-      for (const href of allLinks) {
-        if (href && !urls.includes(href)) {
-          urls.push(href);
-        }
-      }
-    }
-
-    return urls.slice(0, 20); // Limit to 20 results
+    return urls.slice(0, 20);
   }
 
-  /**
-   * Check if there's a next page
-   */
   private async hasNextPage(page: Page): Promise<boolean> {
-    const nextSelectors = [
-      '#pnnext',
-      'a[aria-label="Next page"]',
-      'a:has-text("Next")',
-    ];
-
+    const nextSelectors = ['#pnnext', 'a[aria-label="Next page"]', 'a:has-text("Next")'];
     for (const selector of nextSelectors) {
       const element = await page.$(selector);
-      if (element) {
-        return true;
-      }
+      if (element) return true;
     }
-
     return false;
   }
 }
 
 /**
  * Browser Fallback Manager
- * Manages browser-based scraping as fallback
  */
 export class BrowserFallback {
   private pool: BrowserPool | null = null;
@@ -509,9 +355,6 @@ export class BrowserFallback {
     };
   }
 
-  /**
-   * Initialize the browser fallback
-   */
   async initialize(): Promise<void> {
     if (this.initialized || !this.settings.enabled) return;
 
@@ -524,48 +367,23 @@ export class BrowserFallback {
     await this.pool.initialize();
     this.engine = new BrowserSearchEngine(this.pool, this.settings.timeout);
     this.initialized = true;
-
     logger.info('Browser fallback initialized');
   }
 
-  /**
-   * Perform search using browser
-   */
   async search(dork: string, page: number = 0): Promise<BrowserSearchResult> {
     if (!this.settings.enabled) {
-      return {
-        urls: [],
-        hasNextPage: false,
-        blocked: false,
-        captcha: false,
-        error: 'Browser fallback disabled',
-      };
+      return { urls: [], hasNextPage: false, blocked: false, captcha: false, error: 'Browser fallback disabled' };
     }
-
-    if (!this.initialized) {
-      await this.initialize();
-    }
-
+    if (!this.initialized) await this.initialize();
     return this.engine!.search(dork, page);
   }
 
-  /**
-   * Check if initialized
-   */
-  isInitialized(): boolean {
-    return this.initialized;
-  }
+  isInitialized(): boolean { return this.initialized; }
 
-  /**
-   * Get pool stats
-   */
   getStats(): { total: number; available: number; busy: number } | null {
     return this.pool?.getStats() || null;
   }
 
-  /**
-   * Cleanup resources
-   */
   async cleanup(): Promise<void> {
     if (this.pool) {
       await this.pool.destroy();
@@ -577,12 +395,8 @@ export class BrowserFallback {
   }
 }
 
-// Singleton instance
 let browserFallbackInstance: BrowserFallback | null = null;
 
-/**
- * Get or create browser fallback instance
- */
 export function getBrowserFallback(settings?: Partial<BrowserSettings>): BrowserFallback {
   if (!browserFallbackInstance) {
     browserFallbackInstance = new BrowserFallback(settings);
@@ -590,9 +404,6 @@ export function getBrowserFallback(settings?: Partial<BrowserSettings>): Browser
   return browserFallbackInstance;
 }
 
-/**
- * Reset browser fallback instance
- */
 export async function resetBrowserFallback(): Promise<void> {
   if (browserFallbackInstance) {
     await browserFallbackInstance.cleanup();
