@@ -5,17 +5,14 @@ import { readFile, access, constants, readdir } from 'node:fs/promises';
 import { existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createRequire } from 'node:module';
+import inquirer from 'inquirer';
 
 import { DorkerUI, showBanner } from './ui.js';
 import { WorkerIPC } from './ipc.js';
 import { FilterPipeline } from './filters.js';
 import { OutputWriter, formatNumber, formatDuration } from './output.js';
 
-const require = createRequire(import.meta.url);
-const inquirer = require('inquirer');
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+import inquirer from 'inquirer';
 const VERSION = '1.0.0';
 
 const program = new Command();
